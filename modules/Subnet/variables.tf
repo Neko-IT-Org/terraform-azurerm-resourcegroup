@@ -16,7 +16,8 @@ variable "subnets" {
       id                     = string
       number_of_ip_addresses = number
     }))
-    default_outbound_access_enabled           = optional(bool, false)
+    private_endpoint_network_policies = optional(bool)
+    default_outbound_access_enabled   = optional(bool, false)
     delegations = optional(list(object({
       name = string
       service_delegation = object({

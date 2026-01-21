@@ -1,11 +1,12 @@
 resource "azurerm_subnet" "this" {
-  for_each                        = { for s in var.subnets : s.name => s }
-  name                            = each.value.name
-  resource_group_name             = var.resource_group_name
-  virtual_network_name            = var.virtual_network_name
-  address_prefixes                = each.value.address_prefixes
-  service_endpoints               = lookup(each.value, "service_endpoints", null)
-  default_outbound_access_enabled = lookup(each.value, "default_outbound_access_enabled", null)
+  for_each                          = { for s in var.subnets : s.name => s }
+  name                              = each.value.name
+  resource_group_name               = var.resource_group_name
+  virtual_network_name              = var.virtual_network_name
+  address_prefixes                  = each.value.address_prefixes
+  service_endpoints                 = lookup(each.value, "service_endpoints", null)
+  default_outbound_access_enabled   = lookup(each.value, "default_outbound_access_enabled", null)
+  private_endpoint_network_policies = lookup(each.value, "private_endpoint_network_policies", null)
 
   dynamic "ip_address_pool" {
     for_each = lookup(each.value, "ip_address_pool", null) != null ? [each.value.ip_address_pool] : []
