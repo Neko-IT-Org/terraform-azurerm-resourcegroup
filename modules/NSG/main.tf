@@ -110,3 +110,38 @@ resource "azurerm_network_security_group" "this" {
     }
   )
 }
+
+###############################################################
+# RESOURCE: azurerm_monitor_diagnostic_setting
+# Description: Creates diagnostic settings for the NSG
+# Condition: Created only if enable_telemetry is true
+# Available log categories for NSG:
+#   - NetworkSecurityGroupEvent: NSG rule execution events
+#   - NetworkSecurityGroupRuleCounter: Rule hit counters
+###############################################################
+resource "azurerm_monitor_diagnostic_setting" "this" {
+  count = var.enable_telemetry && var.telemetry_settings != null ? 1 : 0
+
+  name               = "diag-${var.name}"
+  target_resource_id = azurerm_network_security_group.this.id
+
+  log_analytics_workspace_id     = var.telemetry_settings.log_analytics_workspace_id
+  storage_account_id             = var.telemetry_settings.storage_account_id
+  eventhub_authorization_rule_id = var.telemetry_settings.event_hub_authorization_rule_id
+  eventhub_name                  = var.telemetry_settings.event_hub_name
+
+  dynamic "enabled_log" {
+    for_each = var.telemetry_settings.log_categories
+    content {
+      category = enabled_log.value
+    }
+  }
+
+  dynamic "metric" {
+    for_each = var.telemetry_settings.metric_categories
+    content {
+      category = metric.value
+      enabled  = true
+    }
+  }
+}

@@ -72,3 +72,29 @@ resource "azurerm_route_table" "this" {
     }
   )
 }
+
+###############################################################
+# RESOURCE: azurerm_monitor_diagnostic_setting
+# Description: Creates diagnostic settings for the Route Table
+# Condition: Created only if enable_telemetry is true
+# Note: Route Tables have limited diagnostic logs, primarily metrics
+###############################################################
+resource "azurerm_monitor_diagnostic_setting" "this" {
+  count = var.enable_telemetry && var.telemetry_settings != null ? 1 : 0
+
+  name               = "diag-${var.name}"
+  target_resource_id = azurerm_route_table.this.id
+
+  log_analytics_workspace_id     = var.telemetry_settings.log_analytics_workspace_id
+  storage_account_id             = var.telemetry_settings.storage_account_id
+  eventhub_authorization_rule_id = var.telemetry_settings.event_hub_authorization_rule_id
+  eventhub_name                  = var.telemetry_settings.event_hub_name
+
+  dynamic "metric" {
+    for_each = var.telemetry_settings.metric_categories
+    content {
+      category = metric.value
+      enabled  = true
+    }
+  }
+}

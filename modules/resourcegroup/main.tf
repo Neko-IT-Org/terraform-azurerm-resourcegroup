@@ -103,3 +103,62 @@ resource "azurerm_role_assignment" "this" {
   # Delegated Managed Identity (rare, for advanced scenarios)
   delegated_managed_identity_resource_id = try(each.value.delegated_managed_identity_resource_id, null)
 }
+
+###############################################################
+# RESOURCE: azurerm_monitor_diagnostic_setting
+# Description: Creates diagnostic settings for the resource group
+# Condition: Created only if enable_telemetry is true
+# Destinations: Log Analytics, Storage Account, Event Hub
+# Use Cases:
+#   - Compliance and audit logging
+#   - Security monitoring
+#   - Operational insights
+# Note: Resource group diagnostic settings capture activity logs
+###############################################################
+resource "azurerm_monitor_diagnostic_setting" "this" {
+  count = var.enable_telemetry && var.telemetry_settings != null ? 1 : 0
+
+  # Diagnostic setting name
+  name = "diag-${var.name}"
+
+  # Target resource (resource group)
+  target_resource_id = azurerm_resource_group.this.id
+
+  # Log Analytics Workspace (optional)
+  log_analytics_workspace_id = var.telemetry_settings.log_analytics_workspace_id
+
+  # Storage Account for archival (optional)
+  storage_account_id = var.telemetry_settings.storage_account_id
+
+  # Event Hub for streaming (optional)
+  eventhub_authorization_rule_id = var.telemetry_settings.event_hub_authorization_rule_id
+  eventhub_name                  = var.telemetry_settings.event_hub_name
+
+  ###############################################################
+  # DYNAMIC BLOCK: enabled_log
+  # Description: Configures which log categories to capture
+  # for_each: Iterates over log_categories list
+  # Default: ["Administrative"] for resource group activity logs
+  ###############################################################
+  dynamic "enabled_log" {
+    for_each = var.telemetry_settings.log_categories
+    content {
+      category = enabled_log.value
+    }
+  }
+
+  ###############################################################
+  # DYNAMIC BLOCK: metric
+  # Description: Configures which metric categories to capture
+  # for_each: Iterates over metric_categories list
+  # Default: ["AllMetrics"]
+  # Note: Resource groups have limited metrics compared to resources
+  ###############################################################
+  dynamic "metric" {
+    for_each = var.telemetry_settings.metric_categories
+    content {
+      category = metric.value
+      enabled  = true
+    }
+  }
+}

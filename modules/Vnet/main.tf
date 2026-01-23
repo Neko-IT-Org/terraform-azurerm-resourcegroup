@@ -119,3 +119,38 @@ resource "azurerm_virtual_network_peering" "this" {
   # Cannot be true if allow_gateway_transit is true
   use_remote_gateways = lookup(each.value, "use_remote_gateways", false)
 }
+
+###############################################################
+# RESOURCE: azurerm_monitor_diagnostic_setting
+# Description: Creates diagnostic settings for the VNet
+# Condition: Created only if enable_telemetry is true
+# Available log categories for VNet:
+#   - VMProtectionAlerts: DDoS protection alerts
+# Available metrics: AllMetrics (limited for VNet)
+###############################################################
+resource "azurerm_monitor_diagnostic_setting" "this" {
+  count = var.enable_telemetry && var.telemetry_settings != null ? 1 : 0
+
+  name               = "diag-${var.name}"
+  target_resource_id = azurerm_virtual_network.this.id
+
+  log_analytics_workspace_id     = var.telemetry_settings.log_analytics_workspace_id
+  storage_account_id             = var.telemetry_settings.storage_account_id
+  eventhub_authorization_rule_id = var.telemetry_settings.event_hub_authorization_rule_id
+  eventhub_name                  = var.telemetry_settings.event_hub_name
+
+  dynamic "enabled_log" {
+    for_each = var.telemetry_settings.log_categories
+    content {
+      category = enabled_log.value
+    }
+  }
+
+  dynamic "metric" {
+    for_each = var.telemetry_settings.metric_categories
+    content {
+      category = metric.value
+      enabled  = true
+    }
+  }
+}

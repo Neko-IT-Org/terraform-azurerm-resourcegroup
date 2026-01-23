@@ -128,3 +128,58 @@ Each role assignment must specify exactly one of `role_definition_id` or `role_d
 EOT
   }
 }
+
+###############################################################
+# VARIABLE: enable_telemetry
+# Type: bool (optional)
+# Default: false
+# Description: Enable diagnostic settings for telemetry
+# Use Case: Send logs and metrics to Log Analytics, Storage Account, or Event Hub
+# Note: Requires telemetry_settings to be configured if enabled
+###############################################################
+variable "enable_telemetry" {
+  description = "Enable diagnostic settings for telemetry"
+  type        = bool
+  default     = false
+}
+
+###############################################################
+# VARIABLE: telemetry_settings
+# Type: object (optional, nullable)
+# Default: null
+# Description: Diagnostic settings configuration for telemetry
+# Structure:
+#   - log_analytics_workspace_id (optional): Log Analytics Workspace ID
+#   - storage_account_id (optional): Storage Account ID for archival
+#   - event_hub_authorization_rule_id (optional): Event Hub authorization rule ID
+#   - event_hub_name (optional): Event Hub name
+#   - log_categories (optional): List of log categories to enable (default: ["Administrative"])
+#   - metric_categories (optional): List of metric categories to enable (default: ["AllMetrics"])
+# Note: At least one destination (workspace/storage/event hub) must be specified if enable_telemetry is true
+###############################################################
+variable "telemetry_settings" {
+  description = "Diagnostic settings configuration for telemetry"
+  type = object({
+    log_analytics_workspace_id      = optional(string)
+    storage_account_id              = optional(string)
+    event_hub_authorization_rule_id = optional(string)
+    event_hub_name                  = optional(string)
+    log_categories                  = optional(list(string), ["Administrative"])
+    metric_categories               = optional(list(string), ["AllMetrics"])
+  })
+  default  = null
+  nullable = true
+
+  ###############################################################
+  # VALIDATION: At least one destination required
+  # Description: If enable_telemetry is true, at least one destination must be configured
+  ###############################################################
+  validation {
+    condition = var.telemetry_settings == null || (
+      var.telemetry_settings.log_analytics_workspace_id != null ||
+      var.telemetry_settings.storage_account_id != null ||
+      var.telemetry_settings.event_hub_authorization_rule_id != null
+    )
+    error_message = "If telemetry_settings is provided, at least one destination (log_analytics_workspace_id, storage_account_id, or event_hub_authorization_rule_id) must be specified."
+  }
+}

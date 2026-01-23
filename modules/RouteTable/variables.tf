@@ -114,3 +114,44 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+###############################################################
+# VARIABLE: enable_telemetry
+# Type: bool (optional)
+# Default: false
+# Description: Enable diagnostic settings for Route Table telemetry
+###############################################################
+variable "enable_telemetry" {
+  description = "Enable diagnostic settings for telemetry"
+  type        = bool
+  default     = false
+}
+
+###############################################################
+# VARIABLE: telemetry_settings
+# Type: object (optional, nullable)
+# Default: null
+# Description: Diagnostic settings configuration for Route Table telemetry
+# Note: Route Tables have limited diagnostic capabilities
+###############################################################
+variable "telemetry_settings" {
+  description = "Diagnostic settings configuration for telemetry"
+  type = object({
+    log_analytics_workspace_id      = optional(string)
+    storage_account_id              = optional(string)
+    event_hub_authorization_rule_id = optional(string)
+    event_hub_name                  = optional(string)
+    metric_categories               = optional(list(string), ["AllMetrics"])
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition = var.telemetry_settings == null || (
+      var.telemetry_settings.log_analytics_workspace_id != null ||
+      var.telemetry_settings.storage_account_id != null ||
+      var.telemetry_settings.event_hub_authorization_rule_id != null
+    )
+    error_message = "If telemetry_settings is provided, at least one destination must be specified."
+  }
+}

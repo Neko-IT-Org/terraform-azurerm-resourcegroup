@@ -118,3 +118,44 @@ variable "security_rules" {
     error_message = "Direction must be 'Inbound' or 'Outbound'."
   }
 }
+
+###############################################################
+# VARIABLE: enable_telemetry
+# Type: bool (optional)
+# Default: false
+# Description: Enable diagnostic settings for NSG telemetry
+###############################################################
+variable "enable_telemetry" {
+  description = "Enable diagnostic settings for telemetry"
+  type        = bool
+  default     = false
+}
+
+###############################################################
+# VARIABLE: telemetry_settings
+# Type: object (optional, nullable)
+# Default: null
+# Description: Diagnostic settings configuration for NSG telemetry
+###############################################################
+variable "telemetry_settings" {
+  description = "Diagnostic settings configuration for telemetry"
+  type = object({
+    log_analytics_workspace_id      = optional(string)
+    storage_account_id              = optional(string)
+    event_hub_authorization_rule_id = optional(string)
+    event_hub_name                  = optional(string)
+    log_categories                  = optional(list(string), ["NetworkSecurityGroupEvent", "NetworkSecurityGroupRuleCounter"])
+    metric_categories               = optional(list(string), ["AllMetrics"])
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition = var.telemetry_settings == null || (
+      var.telemetry_settings.log_analytics_workspace_id != null ||
+      var.telemetry_settings.storage_account_id != null ||
+      var.telemetry_settings.event_hub_authorization_rule_id != null
+    )
+    error_message = "If telemetry_settings is provided, at least one destination must be specified."
+  }
+}
