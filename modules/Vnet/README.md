@@ -1,63 +1,149 @@
-# Module Terraform Azure Resource Group
+# Azure Virtual Network (VNet) Terraform Module
 
-Ce module Terraform crée et configure un groupe de ressources Azure en appliquant des bonnes pratiques d'étiquetage, de sécurité et de gouvernance. Il ajoute automatiquement un tag `CreatedOn` horodaté et peut, en option, protéger le groupe de ressources par un verrou ou gérer des attributions de rôles.
+This Terraform module creates and configures an Azure Virtual Network with support for DDoS Protection, custom DNS, and IP Address Pools.
 
-## Fonctionnalités principales
+## Features
 
-- Création d'un groupe de ressources Azure avec fusion des tags fournis et du tag `CreatedOn` généré eautomatiquement.
-- Activation facultative d'un verrou (`CanNotDelete` ou `ReadOnly`) pour limiter les suppressions ou modifications accidentelles.
-- Déclaration d'attributions de rôles optionnelles au niveau du groupe de ressources.
+- Creates a VNet with configurable address space
+- Optional DDoS Protection Plan support
+- Custom DNS server configuration
+- IP Address Pool (IPAM) support
+- Automatic `CreatedOn` tag with timestamp
 
-## Exemple d'utilisation
+## Usage
 
 ```hcl
-module "resource_group" {
-  source = "./modules/resourcegroup"
+module "vnet_hub" {
+  source              = "./modules/Vnet"
 
-  name     = "rg-app-prod-westeurope"
-  location = "westeurope"
+  name                = "vnet-hub-neko-weu-01"
+  location            = "westeurope"
+  resource_group_name = module.rg_hub.name
+
+  address_space = ["10.0.0.0/16"]
+  dns_servers   = ["10.0.0.4", "10.0.0.5"]
 
   tags = {
-    environment = "prod"
-    owner       = "team-platform"
+    environment = "lab"
+    project     = "palo-alto-hub"
   }
-
-  lock = {
-    kind = "CanNotDelete"
-    name = "rg-lock"
-  }
-
-  role_assignments = [
-    {
-      principal_id         = "00000000-0000-0000-0000-000000000000"
-      role_definition_name = "Reader"
-      description          = "Lecture seule pour l'équipe FinOps"
-    }
-  ]
 }
 ```
 
-## Variables d'entrée
+## Requirements
 
-| Nom                | Type                                                 | Défaut | Description                                                                                                                                                                                                                                                                                    |
-| ------------------ | ---------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`             | `string`                                             | n/a    | **Obligatoire.** Nom du groupe de ressources (1-90 caractères, autorise lettres, chiffres, `_`, `-`, `.`, `()`, ne doit pas se terminer par un point).                                                                                                                                         |
-| `location`         | `string`                                             | n/a    | **Obligatoire.** Région Azure où déployer le groupe de ressources.                                                                                                                                                                                                                             |
-| `tags`             | `map(string)`                                        | `{}`   | Tags supplémentaires à fusionner avec le tag `CreatedOn` généré automatiquement.                                                                                                                                                                                                               |
-| `lock`             | `object({ kind = string, name = optional(string) })` | `null` | Configuration facultative d'un verrou de gestion. `kind` doit être `"CanNotDelete"` ou `"ReadOnly"`.                                                                                                                                                                                           |
-| `role_assignments` | `list(object({ ... }))`                              | `[]`   | Liste d'attributions de rôles facultatives. Chaque entrée doit définir `principal_id` et exactement une des propriétés `role_definition_id` ou `role_definition_name`, plus des champs optionnels (`condition`, `condition_version`, `description`, `delegated_managed_identity_resource_id`). |
+| Name      | Version   |
+| --------- | --------- |
+| terraform | >= 1.5.0  |
+| azurerm   | >= 3.70.0 |
+| time      | >= 0.9.0  |
 
-## Sorties
+## Providers
 
-| Nom        | Description                                                               |
-| ---------- | ------------------------------------------------------------------------- |
-| `id`       | Identifiant du groupe de ressources, utile pour chaîner d'autres modules. |
-| `name`     | Nom du groupe de ressources créé.                                         |
-| `location` | Région du groupe de ressources.                                           |
-| `tags`     | Ensemble complet des tags appliqués, incluant `CreatedOn`.                |
+| Name    | Version   |
+| ------- | --------- |
+| azurerm | >= 3.70.0 |
+| time    | >= 0.9.0  |
 
-## Notes complémentaires
+## Inputs
 
-- Le tag `CreatedOn` est généré grâce à la ressource `time_static` et reflète l'heure du premier `terraform apply`, ajustée d'une heure.
-- La ressource de verrouillage n'est créée que si la variable `lock` est définie.
-- Les attributions de rôles sont gérées via une itération sur la liste `role_assignments` et permettent de combiner `role_definition_id` ou `role_definition_name` avec des options avancées comme les conditions.
+| Name                    | Description                           | Type           | Default | Required |
+| ----------------------- | ------------------------------------- | -------------- | ------- | :------: |
+| name                    | VNet name                             | `string`       | n/a     |   yes    |
+| location                | Azure region                          | `string`       | n/a     |   yes    |
+| resource_group_name     | Resource group name                   | `string`       | n/a     |   yes    |
+| tags                    | Custom tags                           | `map(string)`  | n/a     |   yes    |
+| address_space           | CIDR blocks (e.g., `["10.0.0.0/16"]`) | `list(string)` | `null`  |    no    |
+| dns_servers             | Custom DNS server IPs                 | `list(string)` | `null`  |    no    |
+| enable_ddos_protection  | Enable DDoS Protection Plan           | `bool`         | `false` |    no    |
+| ddos_protection_plan_id | DDoS Protection Plan ID               | `string`       | `null`  |    no    |
+| ip_address_pool         | IPAM pool configuration               | `object`       | `null`  |    no    |
+
+### ip_address_pool Object Structure
+
+```hcl
+ip_address_pool = {
+  id                     = "/subscriptions/.../ipamPools/pool1"
+  number_of_ip_addresses = "256"
+}
+```
+
+## Outputs
+
+| Name                | Description         |
+| ------------------- | ------------------- |
+| id                  | VNet ID             |
+| name                | VNet name           |
+| resource_group_name | Resource group name |
+| location            | Azure region        |
+| tags                | All applied tags    |
+
+## Examples
+
+### Hub VNet for Palo Alto
+
+```hcl
+module "vnet_hub" {
+  source              = "./modules/Vnet"
+  name                = "vnet-hub-prod-weu-01"
+  location            = "westeurope"
+  resource_group_name = module.rg_hub.name
+
+  address_space = ["10.0.0.0/16"]
+
+  tags = {
+    environment = "production"
+    purpose     = "firewall-hub"
+  }
+}
+```
+
+### Spoke VNet with Custom DNS
+
+```hcl
+module "vnet_spoke" {
+  source              = "./modules/Vnet"
+  name                = "vnet-spoke-app-weu-01"
+  location            = "westeurope"
+  resource_group_name = module.rg_spoke.name
+
+  address_space = ["10.1.0.0/16"]
+  dns_servers   = ["10.0.0.4"]  # Firewall DNS
+
+  tags = {
+    environment = "production"
+    spoke       = "app"
+  }
+}
+```
+
+### VNet with DDoS Protection
+
+```hcl
+module "vnet_protected" {
+  source              = "./modules/Vnet"
+  name                = "vnet-prod-protected-weu-01"
+  location            = "westeurope"
+  resource_group_name = module.rg.name
+
+  address_space           = ["10.2.0.0/16"]
+  enable_ddos_protection  = true
+  ddos_protection_plan_id = azurerm_network_ddos_protection_plan.main.id
+
+  tags = {
+    environment = "production"
+    protected   = "true"
+  }
+}
+```
+
+## Notes
+
+- The `CreatedOn` tag is automatically added
+- If `address_space` is empty/null, VNet is created without CIDR (rare scenario)
+- Default Azure DNS servers are used if not specified
+
+## Resources Created
+
+- `azurerm_virtual_network` - The virtual network
+- `time_static` - Timestamp for CreatedOn tag
