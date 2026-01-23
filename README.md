@@ -1,18 +1,10 @@
-# Azure Infrastructure Terraform - Palo Alto Hub-and-Spoke
+# Azure Infrastructure Terraform Modules
 
-Terraform infrastructure-as-code for deploying a secure Azure Hub-and-Spoke architecture with Palo Alto VM-Series firewall.
+Production-ready Terraform modules for deploying Azure infrastructure following best practices.
 
 ## Architecture
 
-```
-Hub VNet (10.0.0.0/16)
-├── Management Subnet (10.0.0.0/26) - Palo Alto eth0
-├── Untrust Subnet (10.0.1.0/26)    - Palo Alto eth1/1 (Public)
-└── Trust Subnet (10.0.2.0/26)      - Palo Alto eth1/2 (Private)
-    ↓
-Spoke VNets (10.x.0.0/16)
-└── All traffic routed through firewall
-```
+Modular design supporting Hub-and-Spoke, single VNet, or any custom Azure network topology.
 
 ## Modules
 
@@ -53,9 +45,9 @@ terraform apply
 │   ├── Subnet/
 │   ├── NSG/
 │   └── RouteTable/
-├── main.tf           # Root configuration (create this)
-├── variables.tf      # Root variables (create this)
-├── outputs.tf        # Root outputs (create this)
+├── main.tf           # Root configuration
+├── variables.tf      # Root variables
+├── outputs.tf        # Root outputs
 └── README.md
 ```
 
@@ -64,8 +56,8 @@ terraform apply
 - **Modular Design**: Reusable modules for each Azure resource type
 - **Automatic Tagging**: All resources tagged with `CreatedOn` timestamp
 - **Validation**: Built-in validation for Azure naming and configuration rules
-- **Hub-and-Spoke Ready**: Designed for firewall-based network architecture
-- **BGP Awareness**: Configurable BGP propagation to avoid routing loops
+- **Flexible**: Works with IaaS, PaaS, SaaS, Kubernetes, and any Azure service
+- **Production Ready**: Includes locks, RBAC, and security best practices
 
 ## Naming Convention
 
@@ -73,28 +65,17 @@ terraform apply
 
 Examples:
 
-- `rg-neko-lab-weu-01`
+- `rg-myapp-prod-weu-01`
 - `vnet-hub-prod-weu-01`
-- `nsg-mgmt-hub-weu-01`
+- `nsg-aks-cluster-weu-01`
 
-## Security Considerations
+## Use Cases
 
-- NSG rules follow least privilege principle
-- Management subnets isolated with strict NSG
-- No default routes without explicit firewall inspection
-- BGP propagation disabled in spokes to prevent loops
-
-## Next Steps
-
-1. Create `main.tf` with your infrastructure code
-2. Define variables in `variables.tf`
-3. Configure outputs in `outputs.tf`
-4. Deploy Palo Alto VM-Series
-5. Configure bootstrap storage account
-
-## License
-
-MIT
+- Hub-and-Spoke architectures
+- AKS cluster networking
+- Multi-tier applications
+- Isolated environments
+- Any Azure networking scenario
 
 ## Authors
 

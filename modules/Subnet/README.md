@@ -16,28 +16,29 @@ This Terraform module creates and configures multiple Azure subnets with support
 ## Usage
 
 ```hcl
-module "subnets_hub" {
+module "subnets_app" {
   source               = "./modules/Subnet"
 
-  resource_group_name  = module.rg_hub.name
-  virtual_network_name = module.vnet_hub.name
+  resource_group_name  = module.rg.name
+  virtual_network_name = module.vnet.name
 
   subnets = [
     {
-      name             = "subnet-mgmt"
-      address_prefixes = ["10.0.0.0/24"]
-      nsg_id           = module.nsg_mgmt.id
-    },
-    {
-      name             = "subnet-untrust"
+      name             = "subnet-web"
       address_prefixes = ["10.0.1.0/24"]
-      nsg_id           = module.nsg_untrust.id
-      route_table_id   = module.rt_untrust.route_table_id
+      nsg_id           = module.nsg_web.id
+      route_table_id   = module.rt_app.route_table_id
     },
     {
-      name             = "subnet-trust"
+      name             = "subnet-app"
       address_prefixes = ["10.0.2.0/24"]
-      route_table_id   = module.rt_trust.route_table_id
+      nsg_id           = module.nsg_app.id
+      service_endpoints = ["Microsoft.Storage", "Microsoft.KeyVault"]
+    },
+    {
+      name             = "subnet-data"
+      address_prefixes = ["10.0.3.0/24"]
+      nsg_id           = module.nsg_data.id
     }
   ]
 }
@@ -114,71 +115,73 @@ delegations = [
 
 ## Examples
 
-### Hub Subnets for Palo Alto
+### AKS Cluster Subnets
 
 ```hcl
-module "subnets_hub_firewall" {
+module "subnets_aks" {
   source               = "./modules/Subnet"
-  resource_group_name  = module.rg_hub.name
-  virtual_network_name = module.vnet_hub.name
+  resource_group_name  = module.rg.name
+  virtual_network_name = module.vnet.name
 
   subnets = [
     {
-      name             = "subnet-management"
-      address_prefixes = ["10.0.0.0/26"]
-      nsg_id           = module.nsg_mgmt.id
+      name             = "subnet-aks-nodes"
+      address_prefixes = ["10.1.0.0/22"]
+      nsg_id           = module.nsg_aks.id
+      route_table_id   = module.rt_aks.route_table_id
+      service_endpoints = ["Microsoft.Storage", "Microsoft.ContainerRegistry"]
     },
     {
-      name                              = "subnet-untrust"
-      address_prefixes                  = ["10.0.1.0/26"]
-      route_table_id                    = module.rt_untrust.route_table_id
-      default_outbound_access_enabled   = true
-    },
-    {
-      name             = "subnet-trust"
-      address_prefixes = ["10.0.2.0/26"]
-      route_table_id   = module.rt_trust.route_table_id
+      name             = "subnet-aks-pods"
+      address_prefixes = ["10.1.4.0/22"]
     }
   ]
 }
 ```
 
-### Subnet with Service Endpoints
+### Application Tier Subnets
 
 ```hcl
-module "subnet_app" {
+module "subnets_app_tier" {
   source               = "./modules/Subnet"
-  resource_group_name  = module.rg_spoke.name
-  virtual_network_name = module.vnet_spoke.name
+  resource_group_name  = module.rg.name
+  virtual_network_name = module.vnet.name
 
   subnets = [
+    {
+      name             = "subnet-web"
+      address_prefixes = ["10.2.1.0/24"]
+      nsg_id           = module.nsg_web.id
+      route_table_id   = module.rt_app.route_table_id
+      service_endpoints = ["Microsoft.KeyVault"]
+    },
     {
       name             = "subnet-app"
-      address_prefixes = ["10.1.1.0/24"]
+      address_prefixes = ["10.2.2.0/24"]
       nsg_id           = module.nsg_app.id
-      route_table_id   = module.rt_spoke.route_table_id
-      service_endpoints = [
-        "Microsoft.Storage",
-        "Microsoft.KeyVault",
-        "Microsoft.Sql"
-      ]
+      service_endpoints = ["Microsoft.Storage", "Microsoft.Sql"]
+    },
+    {
+      name             = "subnet-db"
+      address_prefixes = ["10.2.3.0/24"]
+      nsg_id           = module.nsg_db.id
     }
   ]
 }
 ```
 
-### Subnet with Delegation (Azure SQL MI)
+### Subnet with Azure SQL MI Delegation
 
 ```hcl
 module "subnet_sqlmi" {
   source               = "./modules/Subnet"
-  resource_group_name  = module.rg_data.name
-  virtual_network_name = module.vnet_data.name
+  resource_group_name  = module.rg.name
+  virtual_network_name = module.vnet.name
 
   subnets = [
     {
       name             = "subnet-sqlmi"
-      address_prefixes = ["10.2.1.0/24"]
+      address_prefixes = ["10.3.1.0/24"]
       nsg_id           = module.nsg_sqlmi.id
       route_table_id   = module.rt_sqlmi.route_table_id
       delegations = [
@@ -199,42 +202,22 @@ module "subnet_sqlmi" {
 }
 ```
 
-### Subnet with Private Endpoints
+### Subnet for Private Endpoints
 
 ```hcl
 module "subnet_private_endpoints" {
   source               = "./modules/Subnet"
-  resource_group_name  = module.rg_spoke.name
-  virtual_network_name = module.vnet_spoke.name
+  resource_group_name  = module.rg.name
+  virtual_network_name = module.vnet.name
 
   subnets = [
     {
       name                               = "subnet-private-endpoints"
-      address_prefixes                   = ["10.1.10.0/24"]
+      address_prefixes                   = ["10.4.10.0/24"]
       private_endpoint_network_policies  = "Disabled"
     }
   ]
 }
-```
-
-## Typical Hub-and-Spoke Architecture
-
-### Hub (Firewall)
-
-```
-VNet Hub: 10.0.0.0/16
-├── subnet-management (10.0.0.0/26)   → Strict NSG, no route table
-├── subnet-untrust    (10.0.1.0/26)   → Route to Internet, permissive NSG
-└── subnet-trust      (10.0.2.0/26)   → Route to Spokes
-```
-
-### Spoke
-
-```
-VNet Spoke: 10.1.0.0/16
-├── subnet-app        (10.1.1.0/24)   → App NSG, Route to FW, Service Endpoints
-├── subnet-data       (10.1.2.0/24)   → Data NSG, Route to FW
-└── subnet-pe         (10.1.10.0/24)  → Private Endpoints, policies disabled
 ```
 
 ## Available Service Endpoints
@@ -254,7 +237,7 @@ VNet Spoke: 10.1.0.0/16
 - **Sizing**: Plan for growth (avoid /30, /29)
 - **Segmentation**: One subnet per tier (web, app, data)
 - **NSG**: Always associate an NSG (except GatewaySubnet)
-- **Route Table**: Associate to force traffic through firewall
+- **Route Table**: Associate to control traffic flow
 - **Private Endpoints**: Dedicate a subnet with policies disabled
 - **Delegations**: One dedicated subnet per managed service
 

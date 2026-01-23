@@ -13,12 +13,12 @@ This Terraform module creates and configures an Azure Network Security Group wit
 ## Usage
 
 ```hcl
-module "nsg_management" {
+module "nsg_app" {
   source              = "./modules/NSG"
 
-  name                = "nsg-mgmt-hub-weu-01"
+  name                = "nsg-app-prod-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_hub.name
+  resource_group_name = module.rg.name
 
   security_rules = [
     {
@@ -29,15 +29,15 @@ module "nsg_management" {
       protocol                   = "Tcp"
       source_port_range          = "*"
       destination_port_range     = "443"
-      source_address_prefix      = "203.0.113.0/24"
+      source_address_prefix      = "10.0.0.0/8"
       destination_address_prefix = "*"
-      description                = "Allow HTTPS from admin network"
+      description                = "Allow HTTPS from internal network"
     }
   ]
 
   tags = {
-    environment = "lab"
-    project     = "palo-alto"
+    environment = "production"
+    application = "web"
   }
 }
 ```
@@ -98,39 +98,27 @@ Each rule must contain:
 
 ## Examples
 
-### NSG for Palo Alto Management
+### NSG for AKS Cluster
 
 ```hcl
-module "nsg_fw_management" {
+module "nsg_aks" {
   source              = "./modules/NSG"
-  name                = "nsg-fw-mgmt-hub-weu-01"
+  name                = "nsg-aks-cluster-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_hub.name
+  resource_group_name = module.rg.name
 
   security_rules = [
     {
-      name                       = "Allow-HTTPS-Admin"
+      name                       = "Allow-Kube-API"
       priority                   = 100
       direction                  = "Inbound"
       access                     = "Allow"
       protocol                   = "Tcp"
       source_port_range          = "*"
       destination_port_range     = "443"
-      source_address_prefix      = "203.0.113.10/32"
+      source_address_prefix      = "10.0.0.0/8"
       destination_address_prefix = "*"
-      description                = "Admin access to firewall GUI"
-    },
-    {
-      name                       = "Allow-SSH-Admin"
-      priority                   = 110
-      direction                  = "Inbound"
-      access                     = "Allow"
-      protocol                   = "Tcp"
-      source_port_range          = "*"
-      destination_port_range     = "22"
-      source_address_prefix      = "203.0.113.10/32"
-      destination_address_prefix = "*"
-      description                = "Admin SSH access"
+      description                = "Allow Kubernetes API access"
     },
     {
       name                       = "Deny-All-Inbound"
@@ -148,35 +136,24 @@ module "nsg_fw_management" {
 
   tags = {
     environment = "production"
-    criticality = "high"
+    workload    = "kubernetes"
   }
 }
 ```
 
-### NSG for Application Subnet
+### NSG for Database Tier
 
 ```hcl
-module "nsg_app" {
+module "nsg_database" {
   source              = "./modules/NSG"
-  name                = "nsg-app-spoke-weu-01"
+  name                = "nsg-db-prod-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_spoke.name
+  resource_group_name = module.rg.name
 
   security_rules = [
     {
-      name                       = "Allow-HTTP-HTTPS"
-      priority                   = 100
-      direction                  = "Inbound"
-      access                     = "Allow"
-      protocol                   = "Tcp"
-      source_port_range          = "*"
-      destination_port_ranges    = ["80", "443"]
-      source_address_prefix      = "10.0.0.0/8"
-      destination_address_prefix = "*"
-    },
-    {
       name                       = "Allow-SQL"
-      priority                   = 200
+      priority                   = 100
       direction                  = "Inbound"
       access                     = "Allow"
       protocol                   = "Tcp"
@@ -184,12 +161,25 @@ module "nsg_app" {
       destination_port_range     = "1433"
       source_address_prefixes    = ["10.1.10.0/24", "10.1.20.0/24"]
       destination_address_prefix = "*"
+      description                = "Allow SQL from app subnets"
+    },
+    {
+      name                       = "Allow-PostgreSQL"
+      priority                   = 110
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_range     = "5432"
+      source_address_prefix      = "10.1.0.0/16"
+      destination_address_prefix = "*"
+      description                = "Allow PostgreSQL from VNet"
     }
   ]
 
   tags = {
     environment = "production"
-    tier        = "application"
+    tier        = "database"
   }
 }
 ```

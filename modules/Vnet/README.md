@@ -13,19 +13,19 @@ This Terraform module creates and configures an Azure Virtual Network with suppo
 ## Usage
 
 ```hcl
-module "vnet_hub" {
+module "vnet_app" {
   source              = "./modules/Vnet"
 
-  name                = "vnet-hub-neko-weu-01"
+  name                = "vnet-app-prod-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_hub.name
+  resource_group_name = module.rg.name
 
-  address_space = ["10.0.0.0/16"]
+  address_space = ["10.1.0.0/16"]
   dns_servers   = ["10.0.0.4", "10.0.0.5"]
 
   tags = {
-    environment = "lab"
-    project     = "palo-alto-hub"
+    environment = "production"
+    application = "webapp"
   }
 }
 ```
@@ -80,39 +80,39 @@ ip_address_pool = {
 
 ## Examples
 
-### Hub VNet for Palo Alto
+### Simple VNet
 
 ```hcl
-module "vnet_hub" {
+module "vnet_app" {
   source              = "./modules/Vnet"
-  name                = "vnet-hub-prod-weu-01"
+  name                = "vnet-app-prod-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_hub.name
+  resource_group_name = module.rg.name
 
-  address_space = ["10.0.0.0/16"]
+  address_space = ["10.1.0.0/16"]
 
   tags = {
     environment = "production"
-    purpose     = "firewall-hub"
+    workload    = "application"
   }
 }
 ```
 
-### Spoke VNet with Custom DNS
+### VNet with Custom DNS
 
 ```hcl
 module "vnet_spoke" {
   source              = "./modules/Vnet"
-  name                = "vnet-spoke-app-weu-01"
+  name                = "vnet-spoke-dev-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_spoke.name
+  resource_group_name = module.rg.name
 
-  address_space = ["10.1.0.0/16"]
-  dns_servers   = ["10.0.0.4"]  # Firewall DNS
+  address_space = ["10.2.0.0/16"]
+  dns_servers   = ["10.0.0.4", "10.0.0.5"]
 
   tags = {
-    environment = "production"
-    spoke       = "app"
+    environment = "development"
+    purpose     = "spoke-network"
   }
 }
 ```
@@ -126,7 +126,7 @@ module "vnet_protected" {
   location            = "westeurope"
   resource_group_name = module.rg.name
 
-  address_space           = ["10.2.0.0/16"]
+  address_space           = ["10.3.0.0/16"]
   enable_ddos_protection  = true
   ddos_protection_plan_id = azurerm_network_ddos_protection_plan.main.id
 
@@ -137,11 +137,64 @@ module "vnet_protected" {
 }
 ```
 
+### VNet for AKS Cluster
+
+```hcl
+module "vnet_aks" {
+  source              = "./modules/Vnet"
+  name                = "vnet-aks-prod-weu-01"
+  location            = "westeurope"
+  resource_group_name = module.rg.name
+
+  address_space = ["10.10.0.0/16"]
+
+  tags = {
+    environment = "production"
+    workload    = "kubernetes"
+  }
+}
+```
+
+### Multi-Region VNet
+
+```hcl
+module "vnet_dr" {
+  source              = "./modules/Vnet"
+  name                = "vnet-app-prod-eus-01"
+  location            = "eastus"
+  resource_group_name = module.rg_dr.name
+
+  address_space = ["10.20.0.0/16"]
+
+  tags = {
+    environment = "production"
+    region      = "dr"
+  }
+}
+```
+
+## Use Cases
+
+- **Hub-and-Spoke**: Central hub VNet with multiple spoke VNets
+- **AKS**: Dedicated VNet for Kubernetes clusters
+- **Multi-Tier Apps**: Separate VNets for web, app, data tiers
+- **Isolation**: Isolated VNets for different environments (dev, staging, prod)
+- **PaaS Integration**: VNets with service endpoints for Azure PaaS services
+
+## Best Practices
+
+- **Address Space Planning**: Reserve sufficient address space for future growth
+- **DNS Configuration**: Use custom DNS for hybrid scenarios, Azure default for cloud-only
+- **Segmentation**: One VNet per workload or environment for isolation
+- **DDoS Protection**: Enable for production workloads exposed to internet
+- **Naming Convention**: Include purpose, environment, and region in VNet name
+
 ## Notes
 
 - The `CreatedOn` tag is automatically added
 - If `address_space` is empty/null, VNet is created without CIDR (rare scenario)
 - Default Azure DNS servers are used if not specified
+- VNet peering must be configured separately
 
 ## Resources Created
 

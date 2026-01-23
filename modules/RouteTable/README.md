@@ -13,27 +13,27 @@ This Terraform module creates and configures an Azure Route Table with custom ro
 ## Usage
 
 ```hcl
-module "rt_spoke_to_firewall" {
+module "rt_app" {
   source              = "./modules/RouteTable"
 
-  name                = "rt-spoke-to-fw-weu-01"
+  name                = "rt-app-spoke-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_spoke.name
+  resource_group_name = module.rg.name
 
   bgp_route_propagation_enabled = false
 
   route = [
     {
-      name                   = "default-to-firewall"
+      name                   = "default-route"
       address_prefix         = "0.0.0.0/0"
       next_hop_type          = "VirtualAppliance"
-      next_hop_in_ip_address = "10.0.2.4"
+      next_hop_in_ip_address = "10.0.100.4"
     }
   ]
 
   tags = {
-    environment = "lab"
-    purpose     = "force-traffic-through-firewall"
+    environment = "production"
+    spoke       = "app"
   }
 }
 ```
@@ -74,7 +74,7 @@ Each route must contain:
   - `VirtualNetworkGateway`: VPN/ExpressRoute Gateway
   - `VnetLocal`: Local VNet routing
   - `Internet`: To Internet
-  - `VirtualAppliance`: NVA (Firewall, etc.)
+  - `VirtualAppliance`: NVA (Network Virtual Appliance)
   - `None`: Blackhole route
 - `next_hop_in_ip_address` (required if `VirtualAppliance`): NVA IP address
 
@@ -90,47 +90,46 @@ Each route must contain:
 
 ## Examples
 
-### Route Table for Spoke to Firewall
+### Route Table for AKS Egress Control
 
 ```hcl
-module "rt_spoke_to_firewall" {
+module "rt_aks_egress" {
   source              = "./modules/RouteTable"
-  name                = "rt-spoke-app-weu-01"
+  name                = "rt-aks-cluster-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_spoke.name
+  resource_group_name = module.rg.name
 
   bgp_route_propagation_enabled = false
 
   route = [
     {
-      name                   = "default-to-firewall"
+      name                   = "default-via-firewall"
       address_prefix         = "0.0.0.0/0"
       next_hop_type          = "VirtualAppliance"
-      next_hop_in_ip_address = "10.0.2.4"  # Palo Alto Trust interface
+      next_hop_in_ip_address = "10.0.100.4"
     },
     {
-      name                   = "to-onprem"
-      address_prefix         = "192.168.0.0/16"
-      next_hop_type          = "VirtualAppliance"
-      next_hop_in_ip_address = "10.0.2.4"
+      name                   = "azure-services"
+      address_prefix         = "168.63.129.16/32"
+      next_hop_type          = "Internet"
     }
   ]
 
   tags = {
     environment = "production"
-    spoke       = "app"
+    workload    = "kubernetes"
   }
 }
 ```
 
-### Route Table for Internet via Firewall
+### Route Table for Internet Egress
 
 ```hcl
-module "rt_internet_via_fw" {
+module "rt_internet" {
   source              = "./modules/RouteTable"
-  name                = "rt-untrust-weu-01"
+  name                = "rt-public-subnet-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_hub.name
+  resource_group_name = module.rg.name
 
   bgp_route_propagation_enabled = false
 
@@ -144,7 +143,7 @@ module "rt_internet_via_fw" {
 
   tags = {
     environment = "production"
-    purpose     = "untrust-subnet"
+    purpose     = "public-egress"
   }
 }
 ```
@@ -156,7 +155,7 @@ module "rt_expressroute" {
   source              = "./modules/RouteTable"
   name                = "rt-gateway-subnet-weu-01"
   location            = "westeurope"
-  resource_group_name = module.rg_hub.name
+  resource_group_name = module.rg.name
 
   bgp_route_propagation_enabled = true
 
@@ -201,58 +200,11 @@ module "rt_blackhole" {
 }
 ```
 
-## Hub-and-Spoke Architecture with Palo Alto
-
-### Routing Diagram
-
-```
-Internet
-   ↓
-[Untrust Subnet - 10.0.1.0/24]
-   ↓
-[Palo Alto Firewall - eth1/1: 10.0.1.4]
-   ↓
-[Trust Subnet - 10.0.2.0/24]
-   ↓
-[Palo Alto Firewall - eth1/2: 10.0.2.4]
-   ↓
-[Spoke VNets - 10.1.0.0/16, 10.2.0.0/16, etc.]
-```
-
-### Recommended Configuration
-
-**For Spokes:**
-
-```hcl
-bgp_route_propagation_enabled = false  # Avoid routing loops
-route = [
-  {
-    name                   = "default-to-firewall"
-    address_prefix         = "0.0.0.0/0"
-    next_hop_type          = "VirtualAppliance"
-    next_hop_in_ip_address = "10.0.2.4"  # Trust IP
-  }
-]
-```
-
-**For Untrust:**
-
-```hcl
-bgp_route_propagation_enabled = false
-route = [
-  {
-    name           = "to-internet"
-    address_prefix = "0.0.0.0/0"
-    next_hop_type  = "Internet"
-  }
-]
-```
-
 ## Best Practices
 
-- **BGP Propagation**: Disable (`false`) in Spokes to avoid routing loops
-- **Next Hop IP**: Use the private IP of the firewall's Trust interface
-- **Default Route**: Always route `0.0.0.0/0` to firewall in Spokes
+- **BGP Propagation**: Disable (`false`) in spoke VNets to avoid routing loops
+- **Next Hop IP**: Use the private IP of your NVA (firewall, router, etc.)
+- **Default Route**: Configure `0.0.0.0/0` based on your security requirements
 - **Segmentation**: Create one Route Table per network function
 
 ## Notes
