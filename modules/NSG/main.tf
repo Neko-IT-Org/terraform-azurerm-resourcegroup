@@ -18,6 +18,7 @@ resource "time_static" "time" {}
 # Validations:
 #   - Priority between 100-4096 (in variables.tf)
 #   - Direction must be Inbound or Outbound (in variables.tf)
+# Note: Supports both traditional address prefixes and Application Security Groups (ASG)
 ###############################################################
 resource "azurerm_network_security_group" "this" {
   # NSG name
@@ -36,7 +37,9 @@ resource "azurerm_network_security_group" "this" {
   # Content:
   #   - name, priority, direction, access, protocol (required)
   #   - source/destination port ranges and address prefixes (optional)
+  #   - source/destination application security groups (optional)
   # Note: lookup() returns null if attribute not present (handles optionals)
+  # ASG Support: Can use ASG IDs instead of address prefixes for more granular control
   ###############################################################
   dynamic "security_rule" {
     for_each = var.security_rules
@@ -63,9 +66,11 @@ resource "azurerm_network_security_group" "this" {
       destination_port_range = lookup(security_rule.value, "destination_port_range", null)
 
       # Source address prefix (single, e.g., "10.0.0.0/8" or "Internet")
+      # Cannot be used with source_application_security_group_ids
       source_address_prefix = lookup(security_rule.value, "source_address_prefix", null)
 
       # Destination address prefix (single, e.g., "VirtualNetwork")
+      # Cannot be used with destination_application_security_group_ids
       destination_address_prefix = lookup(security_rule.value, "destination_address_prefix", null)
 
       # Source port ranges (list, e.g., ["80", "443"])
@@ -75,10 +80,22 @@ resource "azurerm_network_security_group" "this" {
       destination_port_ranges = lookup(security_rule.value, "destination_port_ranges", null)
 
       # Source address prefixes (list, e.g., ["10.0.0.0/8", "172.16.0.0/12"])
+      # Cannot be used with source_application_security_group_ids
       source_address_prefixes = lookup(security_rule.value, "source_address_prefixes", null)
 
       # Destination address prefixes (list)
+      # Cannot be used with destination_application_security_group_ids
       destination_address_prefixes = lookup(security_rule.value, "destination_address_prefixes", null)
+
+      # Source Application Security Group IDs (list)
+      # Alternative to source_address_prefix(es) for more granular control
+      # Example: ["/subscriptions/.../applicationSecurityGroups/asg-web"]
+      source_application_security_group_ids = lookup(security_rule.value, "source_application_security_group_ids", null)
+
+      # Destination Application Security Group IDs (list)
+      # Alternative to destination_address_prefix(es) for more granular control
+      # Example: ["/subscriptions/.../applicationSecurityGroups/asg-db"]
+      destination_application_security_group_ids = lookup(security_rule.value, "destination_application_security_group_ids", null)
 
       # Rule description (for documentation/audit)
       description = lookup(security_rule.value, "description", null)

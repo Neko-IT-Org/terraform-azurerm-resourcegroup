@@ -46,3 +46,25 @@ output "tags" {
   description = "The tags assigned to the VNets created by this module."
   value       = azurerm_virtual_network.this.tags
 }
+
+###############################################################
+# OUTPUT: peering_ids
+# Description: Map of peering names to peering IDs
+# Format: { "peering-name" = "/subscriptions/.../virtualNetworkPeerings/peering-name", ... }
+# Usage: Reference peerings in other modules or for documentation
+###############################################################
+output "peering_ids" {
+  description = "Map of peering names to their resource IDs"
+  value       = { for k, p in azurerm_virtual_network_peering.this : k => p.id }
+}
+
+###############################################################
+# OUTPUT: peering_names
+# Description: Map of peering names
+# Format: { "peering-name" = "peering-name", ... }
+# Usage: Reference peerings by name
+###############################################################
+output "peering_names" {
+  description = "Map of peering names"
+  value       = { for k, p in azurerm_virtual_network_peering.this : k => p.name }
+}

@@ -116,3 +116,46 @@ variable "ip_address_pool" {
   default  = null
   nullable = true
 }
+
+###############################################################
+# VARIABLE: peerings
+# Type: list(object) (optional)
+# Default: []
+# Description: List of VNet peerings to create
+# Structure:
+#   - name (required): Peering name
+#   - remote_virtual_network_id (required): Remote VNet ID
+#   - allow_forwarded_traffic (optional): Allow traffic forwarded by NVA (default: false)
+#   - allow_gateway_transit (optional): Allow remote to use this VNet's gateway (default: false)
+#   - allow_virtual_network_access (optional): Allow communication (default: true)
+#   - use_remote_gateways (optional): Use remote VNet's gateway (default: false)
+# Note: Peering must be created in BOTH VNets (bidirectional)
+# Use Cases:
+#   - Hub-and-Spoke: Hub allows gateway transit, spokes use remote gateways
+#   - Spoke-to-Spoke: Via hub with allow_forwarded_traffic
+###############################################################
+variable "peerings" {
+  description = "List of VNet peerings to create from this VNet"
+  type = list(object({
+    name                         = string
+    remote_virtual_network_id    = string
+    allow_forwarded_traffic      = optional(bool, false)
+    allow_gateway_transit        = optional(bool, false)
+    allow_virtual_network_access = optional(bool, true)
+    use_remote_gateways          = optional(bool, false)
+  }))
+  default = []
+
+  ###############################################################
+  # VALIDATION: Gateway transit conflict
+  # Description: Cannot use remote gateways AND provide gateway transit
+  # Logic: allow_gateway_transit and use_remote_gateways cannot both be true
+  ###############################################################
+  validation {
+    condition = alltrue([
+      for p in var.peerings :
+      !(p.allow_gateway_transit == true && p.use_remote_gateways == true)
+    ])
+    error_message = "allow_gateway_transit and use_remote_gateways cannot both be true in the same peering."
+  }
+}

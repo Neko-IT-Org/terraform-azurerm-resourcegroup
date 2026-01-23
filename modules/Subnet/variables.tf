@@ -31,6 +31,7 @@ variable "virtual_network_name" {
 #   - default_outbound_access_enabled (optional): true/false (default: false)
 #   - delegations (optional): List of delegation objects
 # Note: Subnets do NOT support tags (Azure limitation)
+# Validation: address_prefixes must not be empty list if provided
 ###############################################################
 variable "subnets" {
   type = list(object({
@@ -81,4 +82,17 @@ variable "subnets" {
       })
     })), [])
   }))
+
+  ###############################################################
+  # VALIDATION: address_prefixes not empty
+  # Description: Ensures address_prefixes is not an empty list if provided
+  # Logic: If address_prefixes is not null, it must contain at least one element
+  ###############################################################
+  validation {
+    condition = alltrue([
+      for s in var.subnets :
+      s.address_prefixes == null || length(s.address_prefixes) > 0
+    ])
+    error_message = "address_prefixes must not be an empty list. Either omit it (null) or provide at least one CIDR block."
+  }
 }

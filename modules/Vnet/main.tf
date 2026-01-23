@@ -74,3 +74,48 @@ resource "azurerm_virtual_network" "this" {
     }
   )
 }
+
+###############################################################
+# RESOURCE: azurerm_virtual_network_peering
+# Description: Creates VNet peerings to remote VNets
+# for_each: Iterates over var.peerings list
+# Conditions:
+#   - Created only if var.peerings is not empty
+# Use Cases:
+#   - Hub-and-Spoke architectures
+#   - Cross-region connectivity
+#   - Workload isolation with connectivity
+# Note: Peering must be created in BOTH directions (this module + remote)
+###############################################################
+resource "azurerm_virtual_network_peering" "this" {
+  # for_each: Create one peering per element in var.peerings
+  # Key = peering name (must be unique)
+  for_each = { for p in var.peerings : p.name => p }
+
+  # Peering name
+  name = each.value.name
+
+  # Source VNet (this VNet)
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.this.name
+
+  # Remote VNet to peer with
+  remote_virtual_network_id = each.value.remote_virtual_network_id
+
+  # Allow forwarded traffic from remote VNet
+  # Set to true in spokes when hub has NVA (firewall, router)
+  allow_forwarded_traffic = lookup(each.value, "allow_forwarded_traffic", false)
+
+  # Allow gateway transit (this VNet provides gateway to remote)
+  # Set to true in hub if it has VPN/ExpressRoute gateway
+  allow_gateway_transit = lookup(each.value, "allow_gateway_transit", false)
+
+  # Allow virtual network access
+  # Set to false to block communication (rare)
+  allow_virtual_network_access = lookup(each.value, "allow_virtual_network_access", true)
+
+  # Use remote gateways (use remote VNet's gateway)
+  # Set to true in spokes to use hub's VPN/ExpressRoute gateway
+  # Cannot be true if allow_gateway_transit is true
+  use_remote_gateways = lookup(each.value, "use_remote_gateways", false)
+}

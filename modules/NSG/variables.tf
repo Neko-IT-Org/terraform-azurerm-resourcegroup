@@ -59,10 +59,13 @@ variable "tags" {
 #   - destination_port_ranges (optional): List of destination ports
 #   - source_address_prefixes (optional): List of source addresses
 #   - destination_address_prefixes (optional): List of destination addresses
+#   - source_application_security_group_ids (optional): List of source ASG IDs
+#   - destination_application_security_group_ids (optional): List of destination ASG IDs
 #   - description (optional): Rule description
 # Validations:
 #   - Priority must be between 100 and 4096
 #   - Direction must be "Inbound" or "Outbound"
+# Note: Cannot mix address prefixes and ASG IDs in the same rule direction
 ###############################################################
 variable "security_rules" {
   description = "List of security rules for the NSG"
@@ -81,7 +84,12 @@ variable "security_rules" {
     destination_port_ranges      = optional(list(string))
     source_address_prefixes      = optional(list(string))
     destination_address_prefixes = optional(list(string))
-    description                  = optional(string)
+
+    # Application Security Groups
+    source_application_security_group_ids      = optional(list(string))
+    destination_application_security_group_ids = optional(list(string))
+
+    description = optional(string)
   }))
 
   ###############################################################
