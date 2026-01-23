@@ -1,83 +1,109 @@
+#################################################################################
+# Module Subnet - Sous-réseau Azure (Subnet)
+#################################################################################
+# Description: Ce module crée et gère des sous-réseaux Azure (Subnets) au sein
+#              d'un réseau virtuel existant. Il associe également les NSG
+#              (Network Security Groups) et Route Tables à chaque sous-réseau.
+#              Les sous-réseaux sont des divisions logiques du VNet pour segmenter
+#              le réseau et appliquer des stratégies de sécurité.
+#################################################################################
+
 ###############################################################
-# RESOURCE: azurerm_subnet
-# Description: Creates one or more Azure subnets within a VNet
-# for_each: Iterates over var.subnets list, key = subnet name
-# Inputs:
-#   - var.resource_group_name: Parent RG
-#   - var.virtual_network_name: Parent VNet
-#   - var.subnets: List of subnet objects
-# Dynamic blocks:
-#   - ip_address_pool: Created if ip_address_pool provided
-#   - delegation: Created for each delegation in list
-# Note: Subnets do NOT support tags (Azure limitation)
+# Ressource: Sous-réseaux Azure
 ###############################################################
+# Description: Crée un ou plusieurs sous-réseaux dans un VNet existant
+# Cette ressource utilise for_each pour créer plusieurs subnets
+# Chaque subnet est identifié par son nom unique
+#
+# Structure attendue pour chaque subnet:
+# {
+#   name                             = "subnet-name"
+#   address_prefixes                 = ["10.0.1.0/24"]
+#   service_endpoints                = ["Microsoft.Storage", "Microsoft.Sql"] (optionnel)
+#   default_outbound_access_enabled  = true/false (optionnel)
+#   private_endpoint_network_policies = "Enabled"/"Disabled" (optionnel)
+#   ip_address_pool                  = {...} (optionnel)
+#   delegations                      = [...] (optionnel)
+#   nsg_id                           = "resource-id" (optionnel)
+#   route_table_id                   = "resource-id" (optionnel)
+# }
 resource "azurerm_subnet" "this" {
-  # for_each: Create one subnet per element in var.subnets
-  # Key = subnet name (must be unique)
-  for_each = { for s in var.subnets : s.name => s }
-
-  # Subnet name
-  name = each.value.name
-
-  # Parent resource group
-  resource_group_name = var.resource_group_name
-
-  # Parent virtual network
-  virtual_network_name = var.virtual_network_name
-
-  # Address prefixes (CIDR blocks)
-  # Example: ["10.0.1.0/24"]
-  address_prefixes = each.value.address_prefixes
-
-  # Service endpoints (e.g., ["Microsoft.Storage", "Microsoft.Sql"])
-  # lookup() returns null if not present
-  service_endpoints = lookup(each.value, "service_endpoints", null)
-
-  # Default outbound access enabled (true/false)
-  # Default: false (if not specified)
-  default_outbound_access_enabled = lookup(each.value, "default_outbound_access_enabled", null)
-
-  # Private endpoint network policies ("Enabled" or "Disabled")
-  # "Disabled" required for private endpoints
+  for_each                          = { for s in var.subnets : s.name => s }
+  
+  # Nom du sous-réseau
+  name                              = each.value.name
+  
+  # Groupe de ressources contenant le VNet
+  resource_group_name               = var.resource_group_name
+  
+  # Nom du réseau virtuel parent
+  virtual_network_name              = var.virtual_network_name
+  
+  # Plages d'adresses IP du subnet (notation CIDR)
+  # Exemple: ["10.0.1.0/24"]
+  address_prefixes                  = each.value.address_prefixes
+  
+  # Endpoints de service Microsoft (optionnel)
+  # Exemples: "Microsoft.Storage", "Microsoft.Sql", "Microsoft.EventHub"
+  # Permet l'accès direct aux services Azure sans passer par internet
+  service_endpoints                 = lookup(each.value, "service_endpoints", null)
+  
+  # Active/désactive l'accès sortant par défaut pour les VMs (optionnel)
+  # true = accès sortant par défaut activé
+  # false = accès sortant par défaut désactivé (nécessite une route)
+  default_outbound_access_enabled   = lookup(each.value, "default_outbound_access_enabled", null)
+  
+  # Contrôle les stratégies réseau des endpoints privés (optionnel)
+  # "Enabled" ou "Disabled"
   private_endpoint_network_policies = lookup(each.value, "private_endpoint_network_policies", null)
 
   ###############################################################
-  # DYNAMIC BLOCK: ip_address_pool
-  # Condition: Created only if ip_address_pool is provided in subnet config
-  # for_each: If ip_address_pool != null → list with object, else empty list
-  # Usage: Azure IPAM for centralized IP management
+  # Bloc Dynamique: Pool d'Adresses IP
   ###############################################################
+  # Description: Optionnellement configure un pool d'adresses IP privées
+  #              pour ce sous-réseau
+  # Conditions d'utilisation: ip_address_pool ne doit pas être null
   dynamic "ip_address_pool" {
     for_each = lookup(each.value, "ip_address_pool", null) != null ? [each.value.ip_address_pool] : []
     content {
+      # ID du pool d'adresses IP
       id                     = ip_address_pool.value.id
+      
+      # Nombre d'adresses IP à utiliser du pool
       number_of_ip_addresses = ip_address_pool.value.number_of_ip_addresses
     }
   }
 
   ###############################################################
-  # DYNAMIC BLOCK: delegation
-  # Description: Delegates subnet to Azure managed services
-  # for_each: Iterates over delegations list (default: empty list)
-  # Use Cases:
-  #   - Microsoft.Sql/managedInstances (SQL Managed Instance)
-  #   - Microsoft.Web/serverFarms (App Service)
-  #   - Microsoft.ContainerInstance/containerGroups (ACI)
-  # Note: Delegated subnets become exclusive to that service
+  # Bloc Dynamique: Délégations de Sous-réseau
   ###############################################################
+  # Description: Optionnellement délègue des permissions à des services Azure
+  #              pour créer des ressources gérées dans ce sous-réseau
+  # Utilisation: Certains services Azure (ex: SQL Managed Instances, App Services)
+  #              nécessitent une délégation pour déployer des ressources
+  #
+  # Structure attendue:
+  # delegations = [
+  #   {
+  #     name = "delegation-name"
+  #     service_delegation = {
+  #       name    = "Microsoft.DBforPostgreSQL/serversv2"
+  #       actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+  #     }
+  #   }
+  # ]
   dynamic "delegation" {
     for_each = lookup(each.value, "delegations", [])
     content {
-      # Delegation name
+      # Nom identifiant la délégation
       name = delegation.value.name
 
-      # Service delegation configuration
+      # Configuration de la délégation de service
       service_delegation {
-        # Service name (e.g., "Microsoft.Sql/managedInstances")
-        name = delegation.value.service_delegation.name
-
-        # Actions allowed by the service
-        # Example: ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+        # Nom du service Azure (ex: "Microsoft.DBforPostgreSQL/serversv2")
+        name    = delegation.value.service_delegation.name
+        
+        # Actions autorisées pour le service
         actions = delegation.value.service_delegation.actions
       }
     }
@@ -85,45 +111,52 @@ resource "azurerm_subnet" "this" {
 }
 
 ###############################################################
-# RESOURCE: azurerm_subnet_network_security_group_association
-# Description: Associates NSG to subnet (if nsg_id provided)
-# for_each: Iterates only over subnets that have nsg_id defined
-# Condition: Created only if nsg_id is present and not null
-# Usage: Apply security rules to subnet traffic
+# Ressource: Association NSG - Subnet
 ###############################################################
+# Description: Associe optionnellement un NSG (Network Security Group) à chaque subnet
+# Cette ressource crée une association entre le subnet et un NSG existant
+# pour appliquer les règles de sécurité réseau
+#
+# Conditions: Un NSG n'est associé que si:
+#   1. La clé "nsg_id" existe dans la configuration du subnet
+#   2. La valeur de nsg_id n'est pas null
+#
+# Utilisation: Permet de contrôler le trafic entrant/sortant du subnet
 resource "azurerm_subnet_network_security_group_association" "this" {
-  # for_each: Filter subnets where nsg_id is defined and not null
-  # contains(keys(s), "nsg_id") checks if nsg_id key exists
-  # s.nsg_id != null ensures value is not null
   for_each = {
     for s in var.subnets : s.name => s
     if contains(keys(s), "nsg_id") && s.nsg_id != null
   }
-
-  # Subnet to associate
-  subnet_id = azurerm_subnet.this[each.key].id
-
-  # NSG to associate
+  
+  # ID du subnet auquel associer le NSG
+  subnet_id                 = azurerm_subnet.this[each.key].id
+  
+  # ID du NSG à associer
   network_security_group_id = each.value.nsg_id
 }
 
 ###############################################################
-# RESOURCE: azurerm_subnet_route_table_association
-# Description: Associates Route Table to subnet (if route_table_id provided)
-# for_each: Iterates only over subnets that have route_table_id defined
-# Condition: Created only if route_table_id is present and not null
-# Usage: Force traffic through firewall or custom routes
+# Ressource: Association Route Table - Subnet
 ###############################################################
+# Description: Associe optionnellement une Route Table à chaque subnet
+# Cette ressource crée une association entre le subnet et une Route Table existante
+# pour diriger le trafic selon les routes définies
+#
+# Conditions: Une Route Table n'est associée que si:
+#   1. La clé "route_table_id" existe dans la configuration du subnet
+#   2. La valeur de route_table_id n'est pas null
+#
+# Utilisation: Permet de définir les routes de trafic personnalisées pour le subnet
+#              Exemple: rediriger le trafic vers une appliance virtuelle, VPN, etc.
 resource "azurerm_subnet_route_table_association" "this" {
-  # for_each: Filter subnets where route_table_id is defined and not null
   for_each = {
     for s in var.subnets : s.name => s
     if contains(keys(s), "route_table_id") && s.route_table_id != null
   }
-
-  # Subnet to associate
-  subnet_id = azurerm_subnet.this[each.key].id
-
-  # Route Table to associate
+  
+  # ID du subnet auquel associer la Route Table
+  subnet_id      = azurerm_subnet.this[each.key].id
+  
+  # ID de la Route Table à associer
   route_table_id = each.value.route_table_id
 }

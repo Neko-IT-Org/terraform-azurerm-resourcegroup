@@ -1,100 +1,96 @@
+#################################################################################
+# Module RouteTable - Table de Routage Azure (Route Table)
+#################################################################################
+# Description: Ce module crée et gère une table de routage Azure (Route Table).
+#              Une route table définit comment le trafic réseau est dirigé dans
+#              le réseau virtuel. Elle peut rediriger le trafic vers des appliances
+#              virtuelles, des passerelles VPN, des points de terminaison d'Internet, etc.
+#################################################################################
+
 ###############################################################
-# RESOURCE: time_static
-# Description: Captures timestamp for CreatedOn tag
+# Ressource Time Static
 ###############################################################
+# Capture le timestamp exact de la première application Terraform
+# Utilisée pour ajouter le tag 'CreatedOn' à la table de routage
 resource "time_static" "time" {}
 
 ###############################################################
-# RESOURCE: azurerm_route_table
-# Description: Creates an Azure Route Table with custom routes
-# Inputs:
-#   - var.name: Route Table name
-#   - var.location: Azure region
-#   - var.resource_group_name: Parent RG
-#   - var.bgp_route_propagation_enabled: Enable/disable BGP propagation
-#   - var.route: List of routes (validated)
-#   - var.tags: Custom tags
-# Dynamic block:
-#   - route: Iterates over var.route list
-# Validations:
-#   - next_hop_type must be valid Azure type (in variables.tf)
-#   - next_hop_in_ip_address required for VirtualAppliance (in variables.tf)
-# Use Case: Force traffic through firewall (Hub-and-Spoke)
+# Ressource: Table de Routage Azure
 ###############################################################
+# Description: Crée une table de routage Azure avec des routes configurables
+#              et un contrôle optionnel de la propagation des routes BGP
+# Attributs principaux:
+#   - name: Nom de la table de routage (fourni via variable)
+#   - location: Région Azure (fourni via variable)
+#   - resource_group_name: Groupe de ressources (fourni via variable)
+#   - bgp_route_propagation_enabled: Active/désactive la propagation BGP
 resource "azurerm_route_table" "this" {
-  # Route Table name
-  name = var.name
-
-  # Azure region
-  location = var.location
-
-  # Parent resource group
-  resource_group_name = var.resource_group_name
-
-  # BGP route propagation (default: true)
-  # Set to false in spokes to avoid routing loops
+  # Nom de la table de routage
+  name                          = var.name
+  
+  # Région Azure où créer la table de routage
+  location                      = var.location
+  
+  # Groupe de ressources contenant la table de routage
+  resource_group_name           = var.resource_group_name
+  
+  # Active/désactive la propagation des routes BGP (Border Gateway Protocol)
+  # true = Les routes apprises via BGP sont propagées automatiquement
+  # false = Les routes BGP ne sont pas propagées
+  # Utile pour les connexions ExpressRoute ou VPN site-à-site
   bgp_route_propagation_enabled = var.bgp_route_propagation_enabled
 
   ###############################################################
-  # DYNAMIC BLOCK: route
-  # Description: Defines one or more routes for the route table
-  # for_each: Iterates over var.route list
-  # Content:
-  #   - name: Route name
-  #   - address_prefix: Destination CIDR (e.g., "0.0.0.0/0")
-  #   - next_hop_type: Type of next hop (validated)
-  #   - next_hop_in_ip_address: IP of next hop (required for VirtualAppliance)
-  # Note: lookup() returns null if next_hop_in_ip_address not present
+  # Bloc Dynamique: Routes
   ###############################################################
+  # Description: Crée dynamiquement N routes basées sur la variable input
+  # Chaque route définit où diriger le trafic pour une plage d'adresses IP donnée
+  #
+  # Structure attendue pour chaque route:
+  # {
+  #   name                   = "route-name"
+  #   address_prefix         = "10.0.0.0/8"
+  #   next_hop_type          = "VirtualNetworkGateway" | "VnetLocal" | "Internet" | "VirtualAppliance" | "None"
+  #   next_hop_in_ip_address = "10.0.1.4" (optionnel, requis pour "VirtualAppliance")
+  # }
+  #
+  # Types de Next Hop:
+  #   - VirtualNetworkGateway: Redirection vers une passerelle VPN ou ExpressRoute
+  #   - VnetLocal: Trafic local au VNet (ne quitte pas le VNet)
+  #   - Internet: Redirection vers Internet (via la passerelle Internet par défaut)
+  #   - VirtualAppliance: Redirection vers une appliance virtuelle (ex: Firewall)
+  #   - None: Le trafic est ignoré (blackhole routing)
   dynamic "route" {
     for_each = var.route
     content {
-      # Route name
-      name = route.value.name
-
-      # Destination CIDR block (e.g., "0.0.0.0/0", "10.0.0.0/8")
-      address_prefix = route.value.address_prefix
-
-      # Next hop type (VirtualAppliance, Internet, VnetLocal, etc.)
-      next_hop_type = route.value.next_hop_type
-
-      # Next hop IP address (required if next_hop_type = VirtualAppliance)
-      # Example: "10.0.2.4" (Palo Alto Trust interface IP)
+      # Nom identifiant la route
+      name                   = route.value.name
+      
+      # Plage d'adresses IP de destination (notation CIDR)
+      # Exemple: "10.1.0.0/16", "0.0.0.0/0" (défaut route)
+      address_prefix         = route.value.address_prefix
+      
+      # Type de saut suivant (où diriger le trafic)
+      next_hop_type          = route.value.next_hop_type
+      
+      # Adresse IP du saut suivant (si next_hop_type = "VirtualAppliance")
+      # Exemple: "10.0.1.4" pour une appliance virtuelle
+      # Null pour les autres types de saut suivant
       next_hop_in_ip_address = lookup(route.value, "next_hop_in_ip_address", null)
     }
   }
 
-  # Tags: Merge user tags + auto CreatedOn
+  ###############################################################
+  # Tags
+  ###############################################################
+  # Fusionne les tags fournis par l'utilisateur avec un tag système 'CreatedOn'
+  # CreatedOn contient la date/heure de création formatée en DD-MM-YYYY hh:mm
+  # Un décalage d'une heure est appliqué au timestamp
   tags = merge(
     var.tags,
     {
+      # 'CreatedOn' tag contient la date/heure de création
       CreatedOn = formatdate("DD-MM-YYYY hh:mm", timeadd(time_static.time.id, "1h"))
     }
   )
-}
-
-###############################################################
-# RESOURCE: azurerm_monitor_diagnostic_setting
-# Description: Creates diagnostic settings for the Route Table
-# Condition: Created only if enable_telemetry is true
-# Note: Route Tables have limited diagnostic logs, primarily metrics
-###############################################################
-resource "azurerm_monitor_diagnostic_setting" "this" {
-  count = var.enable_telemetry && var.telemetry_settings != null ? 1 : 0
-
-  name               = "diag-${var.name}"
-  target_resource_id = azurerm_route_table.this.id
-
-  log_analytics_workspace_id     = var.telemetry_settings.log_analytics_workspace_id
-  storage_account_id             = var.telemetry_settings.storage_account_id
-  eventhub_authorization_rule_id = var.telemetry_settings.event_hub_authorization_rule_id
-  eventhub_name                  = var.telemetry_settings.event_hub_name
-
-  dynamic "metric" {
-    for_each = var.telemetry_settings.metric_categories
-    content {
-      category = metric.value
-      enabled  = true
-    }
-  }
 }
