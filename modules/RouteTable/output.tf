@@ -1,5 +1,8 @@
 ###############################################################
-# Outputs the unique resource IDs of all created Azure Route Tables.
+# OUTPUT: route_table_id
+# Description: Route Table resource ID
+# Format: /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Network/routeTables/<rt>
+# Usage: Associate route table to subnets
 ###############################################################
 output "route_table_id" {
   description = "The unique resource IDs of all route tables created by this module. Useful for referencing the route table in other modules or outputs."
@@ -7,7 +10,9 @@ output "route_table_id" {
 }
 
 ###############################################################
-# Outputs the names of all created Azure Route Tables.
+# OUTPUT: route_table_name
+# Description: Route Table name
+# Usage: Display, logging, or referencing in other resources
 ###############################################################
 output "route_table_name" {
   description = "The names of all route tables created by this module. Useful for display, logging, or referencing in other resources."
@@ -15,7 +20,9 @@ output "route_table_name" {
 }
 
 ###############################################################
-# Outputs the route definitions applied to each route table, useful for auditing and validation.
+# OUTPUT: route_table_route
+# Description: Route definitions applied to the route table
+# Usage: Auditing, validation, documentation
 ###############################################################
 output "route_table_route" {
   description = "The route definitions applied to each route table. Useful for auditing and validation."
