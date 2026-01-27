@@ -39,27 +39,27 @@ output "vnets" {
   description = "Tous les VNets créés"
   value = {
     hub = {
-      id                = module.vnet_hub.id
-      name              = module.vnet_hub.name
-      address_space     = var.hub_vnet_address_space
+      id                  = module.vnet_hub.id
+      name                = module.vnet_hub.name
+      address_space       = var.hub_vnet_address_space
       resource_group_name = module.vnet_hub.resource_group_name
     }
     spoke_app = {
-      id                = module.vnet_spoke_app.id
-      name              = module.vnet_spoke_app.name
-      address_space     = var.spoke_app_vnet_address_space
+      id                  = module.vnet_spoke_app.id
+      name                = module.vnet_spoke_app.name
+      address_space       = var.spoke_app_vnet_address_space
       resource_group_name = module.vnet_spoke_app.resource_group_name
     }
     spoke_data = {
-      id                = module.vnet_spoke_data.id
-      name              = module.vnet_spoke_data.name
-      address_space     = var.spoke_data_vnet_address_space
+      id                  = module.vnet_spoke_data.id
+      name                = module.vnet_spoke_data.name
+      address_space       = var.spoke_data_vnet_address_space
       resource_group_name = module.vnet_spoke_data.resource_group_name
     }
     spoke_shared = var.deploy_shared_services ? {
-      id                = module.vnet_spoke_shared[0].id
-      name              = module.vnet_spoke_shared[0].name
-      address_space     = var.spoke_shared_vnet_address_space
+      id                  = module.vnet_spoke_shared[0].id
+      name                = module.vnet_spoke_shared[0].name
+      address_space       = var.spoke_shared_vnet_address_space
       resource_group_name = module.vnet_spoke_shared[0].resource_group_name
     } : null
   }
@@ -165,21 +165,21 @@ output "peerings" {
   description = "Tous les peerings créés"
   value = {
     hub_to_spoke_app = {
-      forward_ids  = module.peering_hub_to_spoke_app.peering_ids
-      reverse_ids  = module.peering_hub_to_spoke_app.reverse_peering_ids
-      states       = module.peering_hub_to_spoke_app.peering_states
+      forward_ids    = module.peering_hub_to_spoke_app.peering_ids
+      reverse_ids    = module.peering_hub_to_spoke_app.reverse_peering_ids
+      states         = module.peering_hub_to_spoke_app.peering_states
       reverse_states = module.peering_hub_to_spoke_app.reverse_peering_states
     }
     hub_to_spoke_data = {
-      forward_ids  = module.peering_hub_to_spoke_data.peering_ids
-      reverse_ids  = module.peering_hub_to_spoke_data.reverse_peering_ids
-      states       = module.peering_hub_to_spoke_data.peering_states
+      forward_ids    = module.peering_hub_to_spoke_data.peering_ids
+      reverse_ids    = module.peering_hub_to_spoke_data.reverse_peering_ids
+      states         = module.peering_hub_to_spoke_data.peering_states
       reverse_states = module.peering_hub_to_spoke_data.reverse_peering_states
     }
     hub_to_spoke_shared = var.deploy_shared_services ? {
-      forward_ids  = module.peering_hub_to_spoke_shared[0].peering_ids
-      reverse_ids  = module.peering_hub_to_spoke_shared[0].reverse_peering_ids
-      states       = module.peering_hub_to_spoke_shared[0].peering_states
+      forward_ids    = module.peering_hub_to_spoke_shared[0].peering_ids
+      reverse_ids    = module.peering_hub_to_spoke_shared[0].reverse_peering_ids
+      states         = module.peering_hub_to_spoke_shared[0].peering_states
       reverse_states = module.peering_hub_to_spoke_shared[0].reverse_peering_states
     } : null
   }
@@ -191,13 +191,13 @@ output "peerings" {
 output "firewall" {
   description = "Informations sur le firewall Palo Alto (si déployé)"
   value = var.deploy_firewall ? {
-    vm_name           = module.palo_alto_firewall[0].vm_name
-    vm_id             = module.palo_alto_firewall[0].vm_id
-    mgmt_public_ip    = module.palo_alto_firewall[0].mgmt_public_ip
-    untrust_public_ip = module.palo_alto_firewall[0].untrust_public_ip
-    mgmt_private_ip   = var.firewall_mgmt_private_ip
+    vm_name            = module.palo_alto_firewall[0].vm_name
+    vm_id              = module.palo_alto_firewall[0].vm_id
+    mgmt_public_ip     = module.palo_alto_firewall[0].mgmt_public_ip
+    untrust_public_ip  = module.palo_alto_firewall[0].untrust_public_ip
+    mgmt_private_ip    = var.firewall_mgmt_private_ip
     untrust_private_ip = var.firewall_untrust_private_ip
-    trust_private_ip  = var.firewall_trust_private_ip
+    trust_private_ip   = var.firewall_trust_private_ip
   } : null
   sensitive = false
 }
@@ -211,27 +211,27 @@ output "landing_zone_summary" {
     project_name = var.project_name
     environment  = var.environment
     location     = var.location
-    
+
     topology = {
       type   = "Hub-and-Spoke"
       hub    = module.vnet_hub.name
       spokes = local.deployed_spokes
     }
-    
+
     network_summary = {
       hub_address_space        = var.hub_vnet_address_space
       spoke_app_address_space  = var.spoke_app_vnet_address_space
       spoke_data_address_space = var.spoke_data_vnet_address_space
       total_vnets              = 2 + (var.deploy_shared_services ? 1 : 0)
     }
-    
+
     security = {
       firewall_deployed = var.deploy_firewall
       firewall_type     = var.deploy_firewall ? "Palo Alto VM-Series" : null
       ddos_protection   = var.enable_ddos_protection
       telemetry_enabled = var.enable_telemetry
     }
-    
+
     routing = {
       default_route_via_firewall = var.deploy_firewall
       firewall_trust_ip          = var.firewall_trust_private_ip
@@ -243,9 +243,10 @@ output "landing_zone_summary" {
 ###############################################################
 # NEXT STEPS
 ###############################################################
-output "next_steps" {
-  description = "Prochaines étapes recommandées après déploiement"
-  value = var.deploy_firewall ? <<-EOT
+locals {
+  log_analytics_status = var.log_analytics_workspace_id != null ? "Activé" : "Non configuré"
+
+  next_steps_with_firewall = <<-EOT
   
   ✅ Landing Zone déployée avec succès!
   
@@ -267,14 +268,16 @@ output "next_steps" {
      • Vérifier les logs du firewall
   
   4️⃣ MONITORING
-     • Vérifier Log Analytics: ${var.log_analytics_workspace_id != null ? "Activé" : "Non configuré"}
+     • Vérifier Log Analytics: ${local.log_analytics_status}
      • Configurer les alertes Azure Monitor
      • Configurer les dashboards
   
   📊 Pour voir tous les détails:
      terraform output landing_zone_summary
   
-  EOT : <<-EOT
+  EOT
+
+  next_steps_without_firewall = <<-EOT
   
   ✅ Landing Zone déployée avec succès!
   
@@ -297,4 +300,9 @@ output "next_steps" {
      terraform output landing_zone_summary
   
   EOT
+}
+
+output "next_steps" {
+  description = "Prochaines étapes recommandées après déploiement"
+  value       = var.deploy_firewall ? local.next_steps_with_firewall : local.next_steps_without_firewall
 }
