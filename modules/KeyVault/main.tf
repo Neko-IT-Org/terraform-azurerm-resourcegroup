@@ -1,3 +1,5 @@
+resource "time_static" "time" {}
+
 ###############################################################
 # Creates an Azure Key Vault with configurable access, network, and security settings.
 ###############################################################
@@ -28,41 +30,45 @@ resource "azurerm_key_vault" "this" {
     }
   }
   # Assign tags for resource organization and management.
-  tags = var.tags
+  tags = merge(
+    var.tags,
+    {
+      CreatedOn = formatdate("DD-MM-YYYY hh:mm", timeadd(time_static.time.id, "1h"))
+    }
+  )
 }
 
-###############################################################
-# Assigns the Key Vault Administrator role to the current user for the created Key Vault.
-###############################################################
-resource "azurerm_role_assignment" "this" {
-  scope                = azurerm_key_vault.this.id
-  role_definition_name = "Key Vault Administrator"
-  principal_id         = data.azurerm_client_config.current.object_id
-}
 ###############################################################
 # Local values for constructing resource names and prefixes for private endpoint.
 ###############################################################
 locals {
-  name_parts         = split("-", var.name)
-  prefixless_name    = slice(local.name_parts, 1, length(local.name_parts) - 1)
-  last_part          = local.name_parts[length(local.name_parts) - 1]
-  last_part_prefixed = "kv${local.last_part}"
+  # Si var.name = "kv-neko-lab-weu-01"
+  # Alors pep_name = "pep-neko-lab-kv-weu-01"
+  pep_base_name = replace(var.name, "kv-", "")
+  pep_name      = "pep-${local.pep_base_name}-kv"
+  psc_name      = "psc-${local.pep_base_name}-kv"
+  ipc_name      = "ipc-${local.pep_base_name}-kv"
 }
 
 ###############################################################
 # Creates a private endpoint for the Key Vault, enabling secure access from a specified subnet.
 ###############################################################
 resource "azurerm_private_endpoint" "this" {
-  name                = "pep-${join("-", concat(local.prefixless_name, [local.last_part_prefixed]))}"
+  name                = local.pep_name
   location            = var.location
   resource_group_name = var.resource_group_name
   subnet_id           = var.subnet_id
-  tags                = var.tags
+  tags = merge(
+    var.tags,
+    {
+      CreatedOn = formatdate("DD-MM-YYYY hh:mm", timeadd(time_static.time.id, "1h"))
+    }
+  )
 
 
   # Defines the private service connection to the Key Vault.
   private_service_connection {
-    name                           = "psc-${join("-", concat(local.prefixless_name, [local.last_part_prefixed]))}"
+    name                           = local.psc_name
     private_connection_resource_id = azurerm_key_vault.this.id
     is_manual_connection           = false
     subresource_names              = ["Vault"]
@@ -71,7 +77,7 @@ resource "azurerm_private_endpoint" "this" {
   dynamic "ip_configuration" {
     for_each = var.private_ip_address != null ? [1] : []
     content {
-      name               = "ipc-${join("-", concat(local.prefixless_name, [local.last_part_prefixed]))}"
+      name               = local.ipc_name
       private_ip_address = var.private_ip_address
       subresource_name   = "Vault"
       member_name        = "default"
@@ -87,4 +93,40 @@ resource "azurerm_private_endpoint" "this" {
       private_dns_zone_ids = var.private_dns_zone_group.private_dns_zone_ids
     }
   }
+
+
+}
+
+resource "azurerm_monitor_diagnostic_setting" "this" {
+  count = var.enable_telemetry && var.telemetry_settings != null ? 1 : 0
+
+  name               = "diag-${var.name}"
+  target_resource_id = azurerm_key_vault.this.id
+
+  log_analytics_workspace_id     = var.telemetry_settings.log_analytics_workspace_id
+  storage_account_id             = var.telemetry_settings.storage_account_id
+  eventhub_authorization_rule_id = var.telemetry_settings.event_hub_authorization_rule_id
+  eventhub_name                  = var.telemetry_settings.event_hub_name
+
+  dynamic "enabled_log" {
+    for_each = var.telemetry_settings.log_categories
+    content {
+      category = enabled_log.value
+    }
+  }
+
+  dynamic "metric" {
+    for_each = var.telemetry_settings.metric_categories
+    content {
+      category = metric.value
+      enabled  = true
+    }
+  }
+}
+
+resource "azurerm_role_assignment" "this" {
+  count                = var.assign_rbac_to_current_user ? 1 : 0
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = data.azurerm_client_config.current.object_id
 }

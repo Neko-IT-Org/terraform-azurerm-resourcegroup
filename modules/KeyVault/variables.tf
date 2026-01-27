@@ -6,8 +6,15 @@ variable "name" {
   description = "Name of the Key Vault."
 }
 
+###############################################################
+# VARIABLE: location
+# Type: string (required)
+# Description: Azure region for the Key Vault
+# Example: "westeurope"
+###############################################################
 variable "location" {
-  type = string
+  description = "Azure region where the Key Vault will be deployed"
+  type        = string
 }
 
 variable "resource_group_name" {
@@ -15,8 +22,14 @@ variable "resource_group_name" {
 }
 
 variable "tenant_id" {
-  type    = string
-  default = "090a1bf9-58cc-49fa-8a9e-3f7b0a100fa9"
+  type        = string
+  description = "Azure AD tenant ID for the Key Vault"
+  default     = null
+
+  validation {
+    condition     = var.tenant_id == null || can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.tenant_id))
+    error_message = "Tenant ID must be a valid GUID format."
+  }
 }
 
 variable "sku_name" {
@@ -45,8 +58,14 @@ variable "enabled_for_template_deployment" {
 }
 
 variable "soft_delete_retention_days" {
-  type    = number
-  default = 90
+  type        = number
+  description = "Number of days to retain soft-deleted Key Vault (7-90)"
+  default     = 90
+
+  validation {
+    condition     = var.soft_delete_retention_days >= 7 && var.soft_delete_retention_days <= 90
+    error_message = "Soft delete retention days must be between 7 and 90."
+  }
 }
 
 variable "purge_protection_enabled" {
@@ -80,8 +99,14 @@ variable "subnet_id" {
 }
 
 variable "private_ip_address" {
-  type = string
+  type    = string
   default = null
+}
+
+variable "assign_rbac_to_current_user" {
+  description = "Automatically assign Key Vault Administrator to current user"
+  type        = bool
+  default     = true
 }
 
 variable "private_dns_zone_group" {
@@ -92,3 +117,42 @@ variable "private_dns_zone_group" {
   default = null
 }
 
+variable "soft_delete_retention_days" {
+  type        = number
+  description = "Number of days to retain soft-deleted Key Vault (7-90)"
+  default     = 90
+
+  validation {
+    condition     = var.soft_delete_retention_days >= 7 && var.soft_delete_retention_days <= 90
+    error_message = "Soft delete retention days must be between 7 and 90."
+  }
+}
+
+variable "enable_telemetry" {
+  description = "Enable diagnostic settings for Key Vault telemetry"
+  type        = bool
+  default     = false
+}
+
+variable "telemetry_settings" {
+  description = "Diagnostic settings configuration for telemetry"
+  type = object({
+    log_analytics_workspace_id      = optional(string)
+    storage_account_id              = optional(string)
+    event_hub_authorization_rule_id = optional(string)
+    event_hub_name                  = optional(string)
+    log_categories                  = optional(list(string), ["AuditEvent", "AzurePolicyEvaluationDetails"])
+    metric_categories               = optional(list(string), ["AllMetrics"])
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition = var.telemetry_settings == null || (
+      var.telemetry_settings.log_analytics_workspace_id != null ||
+      var.telemetry_settings.storage_account_id != null ||
+      var.telemetry_settings.event_hub_authorization_rule_id != null
+    )
+    error_message = "If telemetry_settings is provided, at least one destination must be specified."
+  }
+}
